@@ -23,10 +23,12 @@ src/
 │       ├── payrolls.ts
 │       └── learning.ts
 ├── mcp/
-│   ├── server.ts           # MCP server (stdio transport)
+│   ├── server.ts           # MCP server factory (shared by both transports)
 │   └── tools/              # Tool definitions + handlers per domain
-└── index.ts
-tests/                      # Vitest unit tests (52 tests)
+├── transport/
+│   └── http.ts             # HTTP/Streamable transport (for remote agents & OpenAI)
+└── index.ts                # Entry point: routes to stdio or http based on MCP_TRANSPORT
+tests/                      # Vitest unit tests (53 tests)
 docker/Dockerfile           # Multi-stage build
 docker-compose.yml
 ```
@@ -64,6 +66,10 @@ Required variables:
 | `BIZNEO_API_BASE_URL` | API base URL (default: `https://connect.bizneo.com/hcm`) |
 | `BIZNEO_RATE_LIMIT_RPS` | Max requests per second (default: `10`) |
 | `BIZNEO_RATE_LIMIT_CONCURRENT` | Max concurrent requests (default: `5`) |
+| `MCP_TRANSPORT` | `http` (default for Docker) or `stdio` (local clients) |
+| `MCP_PORT` | HTTP listen port (default: `3000`) |
+| `MCP_HOST` | HTTP bind host (default: `0.0.0.0`) |
+| `MCP_CORS_ORIGINS` | Allowed CORS origins (default: `*`) |
 
 ### 2. Local development
 
@@ -93,7 +99,65 @@ docker build -f docker/Dockerfile -t mcp-bizneo-hr .
 docker run --env-file .env mcp-bizneo-hr
 ```
 
-## Use with Claude Desktop / Claude Code
+## Use with OpenAI Agents (HTTP transport)
+
+The server implements the **MCP Streamable HTTP transport** — the standard remote MCP protocol used by OpenAI's Responses API and Agents SDK.
+
+### Deploy
+
+```bash
+# Start the HTTP server (default: http://0.0.0.0:3000/mcp)
+MCP_TRANSPORT=http MCP_PORT=3000 BIZNEO_API_TOKEN=xxx node dist/index.js
+
+# Or with Docker Compose
+docker compose up --build
+```
+
+### Connect from OpenAI Responses API
+
+```python
+from openai import OpenAI
+
+client = OpenAI()
+response = client.responses.create(
+    model="gpt-4o",
+    tools=[{
+        "type": "mcp",
+        "server_label": "bizneo-hr",
+        "server_url": "http://your-server:3000/mcp",
+        # Add auth header if you front the server with an API gateway:
+        # "headers": {"Authorization": "Bearer your-gateway-token"}
+    }],
+    input="List all active employees in the company",
+)
+```
+
+### Connect from OpenAI Agents SDK (Python)
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerStreamableHttp
+
+async with MCPServerStreamableHttp(
+    name="bizneo-hr",
+    params={"url": "http://your-server:3000/mcp"},
+) as mcp_server:
+    agent = Agent(
+        name="HR Agent",
+        instructions="You help with HR tasks using Bizneo HR.",
+        mcp_servers=[mcp_server],
+    )
+    result = await Runner.run(agent, "Show me employees who joined this month")
+```
+
+### Health check endpoint
+
+```bash
+curl http://your-server:3000/health
+# {"status":"ok","transport":"http","activeSessions":0,"uptime":42.1}
+```
+
+## Use with Claude Desktop / Claude Code (stdio transport)
 
 Add to your MCP client configuration:
 
@@ -104,7 +168,8 @@ Add to your MCP client configuration:
       "command": "node",
       "args": ["/path/to/mcp-server-bizneo-hr/dist/index.js"],
       "env": {
-        "BIZNEO_API_TOKEN": "your_token_here"
+        "BIZNEO_API_TOKEN": "your_token_here",
+        "MCP_TRANSPORT": "stdio"
       }
     }
   }

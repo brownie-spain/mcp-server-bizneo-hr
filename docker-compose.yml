@@ -12,7 +12,12 @@ services:
       - BIZNEO_API_BASE_URL=${BIZNEO_API_BASE_URL:-https://connect.bizneo.com/hcm}
       - BIZNEO_RATE_LIMIT_RPS=${BIZNEO_RATE_LIMIT_RPS:-10}
       - BIZNEO_RATE_LIMIT_CONCURRENT=${BIZNEO_RATE_LIMIT_CONCURRENT:-5}
-      - MCP_TRANSPORT=${MCP_TRANSPORT:-stdio}
+      - MCP_TRANSPORT=${MCP_TRANSPORT:-http}
+      - MCP_PORT=${MCP_PORT:-3000}
+      - MCP_HOST=${MCP_HOST:-0.0.0.0}
+      - MCP_CORS_ORIGINS=${MCP_CORS_ORIGINS:-*}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+    ports:
+      - "${MCP_PORT:-3000}:3000"
     env_file:
       - .env

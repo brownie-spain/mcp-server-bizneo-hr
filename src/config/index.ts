@@ -9,6 +9,9 @@ const configSchema = z.object({
   BIZNEO_RATE_LIMIT_RPS: z.coerce.number().int().positive().default(10),
   BIZNEO_RATE_LIMIT_CONCURRENT: z.coerce.number().int().positive().default(5),
   MCP_TRANSPORT: z.enum(['stdio', 'http']).default('stdio'),
+  MCP_PORT: z.coerce.number().int().positive().default(3000),
+  MCP_HOST: z.string().default('0.0.0.0'),
+  MCP_CORS_ORIGINS: z.string().default('*'),
   LOG_LEVEL: z.enum(['error', 'warn', 'info', 'debug']).default('info'),
 });
 
