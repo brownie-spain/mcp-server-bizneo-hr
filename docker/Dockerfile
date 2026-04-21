@@ -1,5 +1,8 @@
 # ─── Build stage ────────────────────────────────────────────────────────────
-FROM node:22-alpine AS builder
+# public.ecr.aws mirror: same images as Docker Hub, no auth, no rate limits
+FROM public.ecr.aws/docker/library/node:22-alpine AS builder
+
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 
@@ -12,7 +15,9 @@ COPY src ./src
 RUN npm run build
 
 # ─── Production stage ────────────────────────────────────────────────────────
-FROM node:22-alpine AS production
+FROM public.ecr.aws/docker/library/node:22-alpine AS production
+
+RUN apk upgrade --no-cache
 
 WORKDIR /app
 
