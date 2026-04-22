@@ -4,6 +4,7 @@ import cors from 'cors';
 import express from 'express';
 import { createMcpExpressApp } from '@modelcontextprotocol/sdk/server/express.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
+import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
 import { isInitializeRequest } from '@modelcontextprotocol/sdk/types.js';
 import type { BizneoHRApi } from '../api/index.js';
 import { createMcpServer } from '../mcp/server.js';
@@ -36,6 +37,7 @@ export async function startHttpServer(
 
   app.use(express.json());
 
+  // ── Streamable HTTP transport (MCP 2025-03-26) ───────────────────────────
   // Active sessions: sessionId → transport
   const sessions = new Map<string, SessionEntry>();
 
@@ -86,11 +88,39 @@ export async function startHttpServer(
   app.get('/mcp', handleMcp);
   app.delete('/mcp', handleMcp);
 
+  // ── SSE transport (legacy, compatible with OpenWebUI) ────────────────────
+  const sseTransports = new Map<string, SSEServerTransport>();
+
+  app.get('/sse', async (_req, res) => {
+    const transport = new SSEServerTransport('/messages', res);
+    sseTransports.set(transport.sessionId, transport);
+
+    transport.onclose = () => {
+      sseTransports.delete(transport.sessionId);
+    };
+
+    const server = createMcpServer(api);
+    await server.connect(transport);
+    await transport.start();
+  });
+
+  app.post('/messages', async (req, res) => {
+    const sessionId = req.query.sessionId as string;
+    const transport = sseTransports.get(sessionId);
+    if (!transport) {
+      res.status(404).json({ error: 'SSE session not found', sessionId });
+      return;
+    }
+    await transport.handlePostMessage(req, res, req.body);
+  });
+
+  // ── Health ───────────────────────────────────────────────────────────────
   app.get('/health', (_req, res) => {
     res.json({
       status: 'ok',
       transport: 'http',
       activeSessions: sessions.size,
+      activeSseSessions: sseTransports.size,
       uptime: process.uptime(),
     });
   });
@@ -98,7 +128,9 @@ export async function startHttpServer(
   await new Promise<void>((resolve) => {
     app.listen(port, host, () => {
       process.stderr.write(
-        `Bizneo HR MCP Server (HTTP/Streamable) ready at http://${host}:${port}/mcp\n`,
+        `Bizneo HR MCP Server ready at http://${host}:${port}\n` +
+        `  Streamable HTTP : http://${host}:${port}/mcp\n` +
+        `  SSE (OpenWebUI) : http://${host}:${port}/sse\n`,
       );
       resolve();
     });
