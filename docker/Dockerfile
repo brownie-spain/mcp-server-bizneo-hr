@@ -28,7 +28,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 
 COPY --from=builder /app/dist ./dist
 
-EXPOSE 3000
+ARG MCP_PORT=3000
+EXPOSE $MCP_PORT
 
 USER node
 

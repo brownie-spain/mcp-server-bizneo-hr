@@ -17,7 +17,6 @@ services:
       - MCP_HOST=${MCP_HOST:-0.0.0.0}
       - MCP_CORS_ORIGINS=${MCP_CORS_ORIGINS:-*}
       - LOG_LEVEL=${LOG_LEVEL:-info}
-    ports:
-      - "${MCP_PORT:-3000}:3000"
+    network_mode: host
     env_file:
       - .env
